@@ -5,6 +5,7 @@ import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
+import android.graphics.Point;
 import android.media.MediaPlayer;
 import android.media.Ringtone;
 import android.media.RingtoneManager;
@@ -42,6 +43,12 @@ import com.baidu.mapapi.map.MarkerOptions;
 import com.baidu.mapapi.map.MyLocationData;
 import com.baidu.mapapi.map.OverlayOptions;
 import com.baidu.mapapi.model.LatLng;
+import com.baidu.mapapi.utils.DistanceUtil;
+
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.List;
 
 public class MainActivity extends AppCompatActivity implements View.OnLongClickListener {
 
@@ -54,7 +61,12 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
     private NotifyLister mNotifyer;
     private LatLng touchedPoint;
     private Ringtone r;
+    private LatLng longTouchedPoint;
+    private Marker long_marker=null;
+    //储存marker，方便删除等
+    private List<Marker> markerList;
     String in_content="";
+    private String this_date;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,14 +76,14 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
-
+        markerList=new ArrayList<Marker>();
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "长按可留下脚印", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
-                //定义地图状态
+//                Snackbar.make(view, "长按可在你当前地点设置闹钟", Snackbar.LENGTH_LONG)
+//                        .setAction("Action", null).show();
+//                //定义地图状态
                 MapStatus mMapStatus = new MapStatus.Builder()
                         .target(point)
                         .zoom(18)
@@ -80,10 +92,10 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
                 MapStatusUpdate mMapStatusUpdate = MapStatusUpdateFactory.newMapStatus(mMapStatus);
                 //改变地图状态
                 mBaiduMap.setMapStatus(mMapStatusUpdate);
-                TimeUp=false;
+                TimeUp = false;
             }
         });
-        fab.setOnLongClickListener(this);
+      //  fab.setOnLongClickListener(this);
 
 
         //获取地图控件引用
@@ -93,6 +105,7 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
         mBaiduMap.setMapType(BaiduMap.MAP_TYPE_NORMAL);
         // 开启定位图层
         mBaiduMap.setMyLocationEnabled(true);
+        mBaiduMap.setOnMapLongClickListener(long_listener);
         myListener = new BDLocationListener() {
             @Override
             public void onReceiveLocation(BDLocation bdLocation) {
@@ -182,9 +195,26 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
             Toast.makeText(MainActivity.this, "你已经到达当前位置", Toast.LENGTH_SHORT).show();//显示提示
             Uri notification = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
             r = RingtoneManager.getRingtone(MainActivity.this, notification);
-            Log.d("test", "asadad");
             r.play();
             dialog_2();
+            LatLng p1= new LatLng(mlocation.getLatitude(),mlocation.getLongitude());
+            for (int i=0;i<markerList.size();i++){
+                Marker thisMark= markerList.get(i);
+                Log.d("test",markerList.size()+"     size");
+                Log.d("test","i......"+i);
+                LatLng p2=thisMark.getPosition();
+                Log.d("test","distance....."+distance);
+                Log.d("test","otherdistance....."+DistanceUtil. getDistance(p1, p2));
+                if ( DistanceUtil. getDistance(p1, p2)<=3000){
+                    thisMark.remove();
+                    markerList.remove(i);
+                    i=i-1;
+                    this_date=p2.latitude+p2.longitude+"";
+                    Log.d("test1","la..."+p2.latitude+"lo......."+p2.longitude);
+                }
+
+            }
+
 
         }
     }
@@ -236,10 +266,10 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
                 switch(which){
                     case Dialog.BUTTON_POSITIVE:
                         dialog_3();
-                      //  r.stop();
+                        r.stop();
                         break;
                     case Dialog.BUTTON_NEGATIVE:
-
+                        r.stop();
                         break;
                 }
             }
@@ -247,7 +277,7 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
         //dialog参数设置
         AlertDialog.Builder builder=new AlertDialog.Builder(this);  //先得到构造器
         builder.setTitle("提示"); //设置标题
-        builder.setMessage("这里有你留下的记忆"); //设置内容
+        builder.setMessage("你到了你设定的提醒地点范围内"); //设置内容
         builder.setIcon(R.drawable.location2);//设置图标，图片id即可
         builder.setPositiveButton("查看", dialogOnclicListener);
         builder.setNegativeButton("取消", dialogOnclicListener);
@@ -262,7 +292,8 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
         View view = LayoutInflater.from(MainActivity.this).inflate(R.layout.dialog, null);
         //    设置我们自己定义的布局文件作为弹出框的Content
         builder.setView(view);
-        SharedPreferences pref=getSharedPreferences("1", MODE_PRIVATE);
+        Log.d("test1",this_date);
+        SharedPreferences pref=getSharedPreferences(this_date, MODE_PRIVATE);
         TextView textTime = (TextView)view.findViewById(R.id.time);
         TextView textContent = (TextView)view.findViewById(R.id.content);
         textTime.setText(pref.getString("time", ""));
@@ -277,5 +308,68 @@ public class MainActivity extends AppCompatActivity implements View.OnLongClickL
         });
         builder.show();
     }
+
+    private void dialog_4(){
+
+        //dialog参数设置
+        AlertDialog.Builder builder=new AlertDialog.Builder(this);  //先得到构造器
+        //    通过LayoutInflater来加载一个xml的布局文件作为一个View对象
+        final View view = LayoutInflater.from(MainActivity.this).inflate(R.layout.dialog_2, null);
+        //    设置我们自己定义的布局文件作为弹出框的Content
+        builder.setView(view);
+
+        builder.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                //位置提醒相关代码
+                mNotifyer = new NotifyLister();
+                mNotifyer.SetNotifyLocation(longTouchedPoint.latitude, longTouchedPoint.longitude, 3000, "bd09ll");//4个参数代表要位置提醒的点的坐标，具体含义依次为：纬度，经度，距离范围，坐标系类型(gcj02,gps,bd09,bd09ll)
+                mLocationClient.registerNotify(mNotifyer);
+                //注册位置提醒监听事件后，可以通过SetNotifyLocation 来修改位置提醒设置，修改后立刻生效。
+                //BDNotifyListner实现
+                final EditText editContent = (EditText) view.findViewById(R.id.content1);
+                SimpleDateFormat sDateFormat = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
+                String date = sDateFormat.format(new java.util.Date());
+                in_content = editContent.getText().toString();
+                SharedPreferences.Editor editor = getSharedPreferences(longTouchedPoint.latitude+longTouchedPoint.longitude+"", Context.MODE_PRIVATE).edit();
+                Log.d("test1","..."+longTouchedPoint.latitude+longTouchedPoint.longitude+"");
+                editor.putString("content", in_content);
+                editor.putString("time", date);
+                editor.commit();
+                markerList.add(long_marker);
+
+            }
+        });
+        builder.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                long_marker.remove();
+
+            }
+        });
+        builder.create().show();
+    }
+    //地图长按点击事件
+    BaiduMap.OnMapLongClickListener long_listener = new BaiduMap.OnMapLongClickListener() {
+        /**
+         * 地图长按事件监听回调函数
+         * @param point 长按的地理坐标
+         */
+        public void onMapLongClick(LatLng point){
+            longTouchedPoint=point;
+            //构建Marker图标
+            BitmapDescriptor bitmap = BitmapDescriptorFactory
+                    .fromResource(R.drawable.point);
+            OverlayOptions option;
+                //构建MarkerOption，用于在地图上添加Marker
+                option= new MarkerOptions()
+                        .position(point)
+                        .icon(bitmap);
+                //在地图上添加Marker，并显示
+            long_marker= (Marker) mBaiduMap.addOverlay(option);
+            dialog_4();
+
+        }
+    };
 
 }
